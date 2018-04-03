@@ -134,6 +134,12 @@ function getNodeProps(node, key, opts, renderer, parent, index) {
       props.escapeHtml = opts.escapeHtml
       props.skipHtml = opts.skipHtml
       break
+    case 'shortcode':
+      assignDefined(props, {
+        identifier: node.identifier,
+        attributes: node.attributes || {}
+      });
+      break;
     default:
   }
 
