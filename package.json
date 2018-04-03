@@ -9,6 +9,7 @@
   ],
   "main": "lib/react-markdown.js",
   "scripts": {
+    "prepare": "npm run compile && NODE_ENV=production webpack -p",
     "build": "npm run clean && npm run compile && NODE_ENV=production webpack -p && npm run build:demo",
     "build:demo": "NODE_ENV=production webpack -p --config webpack.config.demo.js",
     "clean": "rimraf lib/",
