@@ -6,9 +6,11 @@ const React = require('react')
 const breaks = require('remark-breaks')
 const ReactDom = require('react-dom/server')
 const renderer = require('react-test-renderer')
+const shortcodes = require('remark-shortcodes')
+const htmlParser = require('../src/plugins/html-parser')
 const Markdown = require('../src/react-markdown')
+const MarkdownWithHtml = require('../src/with-html')
 
-const render = input => renderer.create(<Markdown source={input} />).toJSON().children
 const renderHTML = input => ReactDom.renderToStaticMarkup(input).replace(/^<div>|<\/div>$/g, '')
 
 test('can render the most basic of documents (single paragraph)', () => {
@@ -57,10 +59,29 @@ test('should handle links with title attribute', () => {
   expect(component.toJSON()).toMatchSnapshot()
 })
 
+test('should handle links with uppercase protocol', () => {
+  const input = 'This is [a link](HTTPS://ESPEN.CODES/) to Espen.Codes.'
+  const component = renderer.create(<Markdown source={input} />)
+  expect(component.toJSON()).toMatchSnapshot()
+})
+
 test('should handle links with custom uri transformer', () => {
   const input = 'This is [a link](https://espen.codes/) to Espen.Codes.'
   const transform = uri => uri.replace(/^https?:/, '')
   const component = renderer.create(<Markdown transformLinkUri={transform} source={input} />)
+  expect(component.toJSON()).toMatchSnapshot()
+})
+
+test('should use target attribute for links if specified', () => {
+  const input = 'This is [a link](https://espen.codes/) to Espen.Codes.'
+  const component = renderer.create(<Markdown linkTarget="_blank" source={input} />)
+  expect(component.toJSON()).toMatchSnapshot()
+})
+
+test('should call function to get target attribute for links if specified', () => {
+  const input = 'This is [a link](https://espen.codes/) to Espen.Codes.'
+  const getTarget = (uri) => uri.match(/^http/) ? '_blank' : undefined;
+  const component = renderer.create(<Markdown linkTarget={getTarget} source={input} />)
   expect(component.toJSON()).toMatchSnapshot()
 })
 
@@ -97,11 +118,11 @@ test('should handle images with special characters in alternative text', () => {
 })
 
 test('should be able to render headers', () => {
-  expect(render('# Awesome')[0]).toEqual({type: 'h1', props: {}, children: ['Awesome']})
-  expect(render('## Awesome')[0]).toEqual({type: 'h2', props: {}, children: ['Awesome']})
-  expect(render('### Awesome')[0]).toEqual({type: 'h3', props: {}, children: ['Awesome']})
-  expect(render('#### Awesome')[0]).toEqual({type: 'h4', props: {}, children: ['Awesome']})
-  expect(render('##### Awesome')[0]).toEqual({type: 'h5', props: {}, children: ['Awesome']})
+  expect(renderHTML(<Markdown source={'# Awesome'} />)).toEqual('<h1>Awesome</h1>')
+  expect(renderHTML(<Markdown source={'## Awesome'} />)).toEqual('<h2>Awesome</h2>')
+  expect(renderHTML(<Markdown source={'### Awesome'} />)).toEqual('<h3>Awesome</h3>')
+  expect(renderHTML(<Markdown source={'#### Awesome'} />)).toEqual('<h4>Awesome</h4>')
+  expect(renderHTML(<Markdown source={'##### Awesome'} />)).toEqual('<h5>Awesome</h5>')
 })
 
 test('should be able to render inline code', () => {
@@ -140,14 +161,7 @@ test('should handle code blocks by indentation', () => {
   const input = ['', '<footer class="footer">\n', '', '&copy; 2014 Foo Bar\n', '</footer>'].join(
     '    '
   )
-  const pre = render(input)[0]
-  expect(pre.type).toEqual('pre')
-  expect(pre.children).toHaveLength(1)
-
-  const code = pre.children[0]
-  expect(code.type).toEqual('code')
-  expect(code.children).toHaveLength(1)
-  expect(code.children[0]).toEqual('<footer class="footer">\n    &copy; 2014 Foo Bar\n</footer>')
+  expect(renderHTML(<Markdown source={input} />)).toMatchSnapshot()
 })
 
 test('should handle blockquotes', () => {
@@ -204,6 +218,23 @@ test('should handle ordered lists with a start index', () => {
   expect(component.toJSON()).toMatchSnapshot()
 })
 
+test('should pass depth, index and ordered props to list/listItem', () => {
+  const input = '- foo\n  2. bar\n  3. baz\n- root\n'
+  const renderers = {
+    listItem: item => {
+      expect(item.index).toBeGreaterThanOrEqual(0)
+      expect(item.ordered).not.toBeUndefined()
+      return Markdown.renderers.listItem(item)
+    },
+    list: item => {
+      expect(item.depth).toBeGreaterThanOrEqual(0)
+      return Markdown.renderers.list(item)
+    }
+  }
+  const component = renderer.create(<Markdown source={input} renderers={renderers} />)
+  expect(component.toJSON()).toMatchSnapshot()
+})
+
 test('should handle inline html with escapeHtml option enabled', () => {
   const input = 'I am having <strong>so</strong> much fun'
   const component = renderer.create(<Markdown source={input} />)
@@ -216,10 +247,57 @@ test('should be able to render basic inline html without containers', () => {
   expect(component.toJSON()).toMatchSnapshot()
 })
 
-// @todo need better handling of inline HTML. hard. need help. plz help.
 test('should be able to render inline html in totally unsatisfying, weird ways', () => {
   const input = 'I am having <span class="foo">so</span> much fun'
   const component = renderer.create(<Markdown source={input} escapeHtml={false} />)
+  expect(component.toJSON()).toMatchSnapshot()
+})
+
+test('should be able to render inline html properly with HTML parser plugin', () => {
+  const input = 'I am having <span class="foo">so</span> much fun'
+  const component = renderer.create(
+    <Markdown source={input} escapeHtml={false} astPlugins={[htmlParser()]} />
+  )
+  expect(component.toJSON()).toMatchSnapshot()
+})
+
+test('should be able to render inline html properly with HTML parser plugin (through require)', () => {
+  const input = 'I am having <span class="foo">so</span> much fun'
+  const component = renderer.create(
+    <MarkdownWithHtml source={input} escapeHtml={false}  />
+  )
+  expect(component.toJSON()).toMatchSnapshot()
+})
+
+test('should be able to render inline html with nested markdown properly with HTML parser plugin', () => {
+  const input = 'I am having <span class="foo">*so*</span> much fun'
+  const component = renderer.create(
+    <Markdown source={input} escapeHtml={false} astPlugins={[htmlParser()]} />
+  )
+  expect(component.toJSON()).toMatchSnapshot()
+})
+
+test('should be able to render inline html with self-closing tags properly with HTML parser plugin', () => {
+  const input = 'I am having <wbr/> so much fun'
+  const component = renderer.create(
+    <Markdown source={input} escapeHtml={false} astPlugins={[htmlParser()]} />
+  )
+  expect(component.toJSON()).toMatchSnapshot()
+})
+
+test('should be able to render inline html with self-closing tags with attributes properly with HTML parser plugin', () => {
+  const input = 'I am having <wbr class="foo"/> so much fun'
+  const component = renderer.create(
+    <Markdown source={input} escapeHtml={false} astPlugins={[htmlParser()]} />
+  )
+  expect(component.toJSON()).toMatchSnapshot()
+})
+
+test('should handle invalid HTML with HTML parser plugin', () => {
+  const input = 'I am having <div> so much</em> fun'
+  const component = renderer.create(
+    <Markdown source={input} escapeHtml={false} astPlugins={[htmlParser()]} />
+  )
   expect(component.toJSON()).toMatchSnapshot()
 })
 
@@ -258,7 +336,51 @@ test('should skip html blocks if skipHtml prop is set', () => {
     ' regular paragraph.'
   ].join('')
 
-  const component = renderer.create(<Markdown source={input} skipHtml />)
+  const component = renderer.create(<Markdown source={input} escapeHtml={false} skipHtml />)
+  expect(component.toJSON()).toMatchSnapshot()
+})
+
+test('should skip html blocks if skipHtml prop is set (with HTML parser plugin)', () => {
+  const input = [
+    'This is a regular paragraph.\n\n<table>\n    <tr>\n        ',
+    '<td>Foo</td>\n    </tr>\n</table>\n\nThis is another',
+    ' regular paragraph.'
+  ].join('')
+
+  const component = renderer.create(<Markdown source={input} escapeHtml={false} skipHtml astPlugins={[htmlParser()]} />)
+  expect(component.toJSON()).toMatchSnapshot()
+})
+
+test('should escape html blocks if escapeHtml prop is set (with HTML parser plugin)', () => {
+  const input = [
+    'This is a regular paragraph.\n\n<table>\n    <tr>\n        ',
+    '<td>Foo</td>\n    </tr>\n</table>\n\nThis is another',
+    ' regular paragraph.'
+  ].join('')
+
+  const component = renderer.create(<Markdown source={input} escapeHtml astPlugins={[htmlParser()]} />)
+  expect(component.toJSON()).toMatchSnapshot()
+})
+
+test('should escape html blocks by default (with HTML parser plugin)', () => {
+  const input = [
+    'This is a regular paragraph.\n\n<table>\n    <tr>\n        ',
+    '<td>Foo</td>\n    </tr>\n</table>\n\nThis is another',
+    ' regular paragraph.'
+  ].join('')
+
+  const component = renderer.create(<Markdown source={input} astPlugins={[htmlParser()]} />)
+  expect(component.toJSON()).toMatchSnapshot()
+})
+
+test('should handle html blocks with HTML parser plugin', () => {
+  const input = [
+    'This is a regular paragraph.\n\n<table>\n    <tr>\n        ',
+    '<td>Foo</td>\n    </tr>\n</table>\n\nThis is another',
+    ' regular paragraph.'
+  ].join('')
+
+  const component = renderer.create(<Markdown source={input} escapeHtml={false} astPlugins={[htmlParser()]} />)
   expect(component.toJSON()).toMatchSnapshot()
 })
 
@@ -274,9 +396,19 @@ test('should set source position attributes if sourcePos option is enabled', () 
   expect(component.toJSON()).toMatchSnapshot()
 })
 
+test('should pass on raw source position to non-tag renderers if rawSourcePos option is enabled', () => {
+  const input = '*Foo*\n\n------------\n\n__Bar__'
+  const emphasis = props => {
+    expect(props.sourcePosition).toMatchSnapshot()
+    return <em className="custom">{props.children}</em>
+  }
+  const component = renderer.create(<Markdown source={input} renderers={{emphasis}} rawSourcePos />)
+  expect(component.toJSON()).toMatchSnapshot()
+})
+
 test('should skip nodes that are not defined as allowed', () => {
   const input = '# Header\n\nParagraph\n## New header\n1. List item\n2. List item 2'
-  const allowed = ['paragraph', 'list', 'listItem']
+  const allowed = ['paragraph', 'list', 'listItem', 'text']
   const component = renderer.create(<Markdown source={input} allowedTypes={allowed} />)
   expect(component.toJSON()).toMatchSnapshot()
 })
@@ -328,6 +460,12 @@ test('should render link references', () => {
   expect(renderHTML(<Markdown source={input} />)).toMatchSnapshot()
 })
 
+test('should render empty link references', () => {
+  const input = 'Stuff were changed in [][]. Check out the changelog for reference.';
+
+  expect(renderHTML(<Markdown source={input} />)).toMatchSnapshot()
+})
+
 test('should render image references', () => {
   const input = [
     'Checkout out this ninja: ![The Waffle Ninja][ninja]. Pretty neat, eh?',
@@ -374,6 +512,12 @@ describe('should skip nodes that are defined as disallowed', () => {
       )
     })
   })
+})
+
+test('should throw if html parser is used without config', () => {
+  expect(() => {
+    renderHTML(<Markdown source="" astPlugins={[htmlParser]} />)
+  }).toThrow(/called before use/i)
 })
 
 test('should throw if both allowed and disallowed types is specified', () => {
@@ -432,6 +576,41 @@ test('can render the whole spectrum of markdown within a single run', done => {
     expect(component.toJSON()).toMatchSnapshot()
     done()
   })
+})
+
+test('can render the whole spectrum of markdown within a single run (with html parser)', done => {
+  fs.readFile(path.join(__dirname, 'fixtures', 'runthrough.md'), 'utf8', (err, fixture) => {
+    if (err) {
+      done(err)
+      return
+    }
+
+    const component = renderer.create(<MarkdownWithHtml source={fixture} escapeHtml={false} />)
+    expect(component.toJSON()).toMatchSnapshot()
+    done()
+  })
+})
+
+test('passes along all props when the node type is unknown', () => {
+  expect.assertions(3)
+
+  const ShortcodeRenderer = props => {
+    expect(props.identifier).toBe('GeoMarker')
+    expect(props.attributes).toEqual({lat: '59.924082', lng: '10.758460', title: 'Sanity'})
+    return <div>{props.attributes.title}</div>
+  }
+
+  const input = 'Paragraph\n\n[[ GeoMarker lat="59.924082" lng="10.758460" title="Sanity" ]]'
+  const component = renderer.create(
+    <Markdown
+      source={input}
+      plugins={[shortcodes]}
+      renderers={{shortcode: ShortcodeRenderer}}
+      escapeHtml={false}
+    />
+  )
+
+  expect(component.toJSON()).toMatchSnapshot()
 })
 
 test('can match and reactify cheap/simple inline html', () => {
@@ -513,17 +692,27 @@ test('supports checkbox lists', () => {
 
 test('should be able to override text renderer', () => {
   const input = '# Header\n\nParagraph\n## New header\n1. List item\n2. List item 2\n\nFoo'
-  const textRenderer = text => text.toUpperCase()
+  const textRenderer = props => props.children.toUpperCase()
   const component = renderer.create(<Markdown source={input} renderers={{text: textRenderer}} />)
   expect(component.toJSON()).toMatchSnapshot()
 })
 
 test('should pass the key to an overriden text renderer', () => {
-  const textRenderer = (text, key) => {
-    expect(key).toEqual('text-1-1');
-    return <marquee key={key}>{text}</marquee>;
+  const textRenderer = (props) => {
+    expect(props.nodeKey).toEqual('text-1-1');
+    return <marquee key={props.nodeKey}>{props.children}</marquee>;
   }
 
   renderer.create(<Markdown source={'foo'} renderers={{ text: textRenderer }} />)
 })
 
+test('should pass index of a node under its parent to non-tag renderers if includeNodeIndex option is enabled', () => {
+  const input = 'Foo\n\nBar\n\nBaz'
+  const paragraph = props => {
+    expect(props).toMatchSnapshot()
+    return <p>{props.children}</p>
+  };
+
+  const component = renderer.create(<Markdown renderers={{ paragraph }} source={input} includeNodeIndex />)
+  expect(component.toJSON()).toMatchSnapshot()
+})

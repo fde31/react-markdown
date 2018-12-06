@@ -4,13 +4,15 @@ const xtend = require('xtend')
 const unified = require('unified')
 const parse = require('remark-parse')
 const PropTypes = require('prop-types')
+const addListMetadata = require('mdast-add-list-metadata')
 const naiveHtml = require('./plugins/naive-html')
 const disallowNode = require('./plugins/disallow-node')
 const astToReact = require('./ast-to-react')
 const wrapTableRows = require('./wrap-table-rows')
 const getDefinitions = require('./get-definitions')
-const uriTransformer = require('./uriTransformer')
+const uriTransformer = require('./uri-transformer')
 const defaultRenderers = require('./renderers')
+const symbols = require('./symbols')
 
 const allTypes = Object.keys(defaultRenderers)
 
@@ -39,11 +41,11 @@ const ReactMarkdown = function ReactMarkdown(props) {
 }
 
 function applyParserPlugin(parser, plugin) {
-  return Array.isArray(plugin) ? parser.use(plugin[0], plugin[1]) : parser.use(plugin)
+  return Array.isArray(plugin) ? parser.use(...plugin) : parser.use(plugin)
 }
 
 function determineAstPlugins(props) {
-  const plugins = [wrapTableRows]
+  const plugins = [wrapTableRows, addListMetadata()]
 
   let disallowedTypes = props.disallowedTypes
   if (props.allowedTypes) {
@@ -62,7 +64,12 @@ function determineAstPlugins(props) {
   }
 
   const renderHtml = !props.escapeHtml && !props.skipHtml
-  if (renderHtml) {
+  const hasHtmlParser = (props.astPlugins || []).some(item => {
+    const plugin = Array.isArray(item) ? item[0] : item
+    return plugin.identity === symbols.HtmlParser
+  })
+
+  if (renderHtml && !hasHtmlParser) {
     plugins.push(naiveHtml)
   }
 
@@ -73,7 +80,11 @@ ReactMarkdown.defaultProps = {
   renderers: {},
   escapeHtml: true,
   skipHtml: false,
-  transformLinkUri: uriTransformer
+  sourcePos: false,
+  rawSourcePos: false,
+  transformLinkUri: uriTransformer,
+  astPlugins: [],
+  plugins: []
 }
 
 ReactMarkdown.propTypes = {
@@ -81,16 +92,19 @@ ReactMarkdown.propTypes = {
   source: PropTypes.string,
   children: PropTypes.string,
   sourcePos: PropTypes.bool,
+  rawSourcePos: PropTypes.bool,
   escapeHtml: PropTypes.bool,
   skipHtml: PropTypes.bool,
   allowNode: PropTypes.func,
   allowedTypes: PropTypes.arrayOf(PropTypes.oneOf(allTypes)),
   disallowedTypes: PropTypes.arrayOf(PropTypes.oneOf(allTypes)),
   transformLinkUri: PropTypes.oneOfType([PropTypes.func, PropTypes.bool]),
+  linkTarget: PropTypes.oneOfType([PropTypes.func, PropTypes.string]),
   transformImageUri: PropTypes.func,
   astPlugins: PropTypes.arrayOf(PropTypes.func),
   unwrapDisallowed: PropTypes.bool,
-  renderers: PropTypes.object
+  renderers: PropTypes.object,
+  plugins: PropTypes.array
 }
 
 ReactMarkdown.types = allTypes

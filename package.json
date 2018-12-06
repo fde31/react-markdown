@@ -1,17 +1,20 @@
 {
   "name": "react-markdown",
   "description": "Renders Markdown as React components",
-  "version": "3.3.0",
+  "version": "4.0.4",
   "keywords": [
     "markdown",
     "react",
     "react-component"
   ],
   "main": "lib/react-markdown.js",
+  "unpkg": "umd/react-markdown.js",
   "scripts": {
-    "prepare": "npm run compile && NODE_ENV=production webpack -p",
+    "prepare": "npm run build",
+    "analyze": "npm run clean && npm run compile && NODE_ENV=production ANALYZE_BUNDLE=1 webpack -p",
     "build": "npm run clean && npm run compile && NODE_ENV=production webpack -p && npm run build:demo",
     "build:demo": "NODE_ENV=production webpack -p --config webpack.config.demo.js",
+    "postbuild": "echo 'Ensuring ES5 compatibility...' && uglifyjs umd/react-markdown.js > /dev/null && echo 'Yep!'",
     "clean": "rimraf lib/",
     "compile": "babel --copy-files -d lib/ src/",
     "deploy": "gh-pages-deploy",
@@ -19,7 +22,8 @@
     "prepublishOnly": "npm run qa",
     "qa": "npm test && npm run build",
     "test": "jest --coverage",
-    "watch": "webpack --watch"
+    "watch": "webpack --watch",
+    "watch:demo": "webpack --watch --config webpack.config.demo.js"
   },
   "repository": {
     "type": "git",
@@ -35,6 +39,8 @@
     "staticpath": "demo/dist"
   },
   "dependencies": {
+    "html-to-react": "^1.3.3",
+    "mdast-add-list-metadata": "1.0.1",
     "prop-types": "^15.6.1",
     "remark-parse": "^5.0.0",
     "unified": "^6.1.5",
@@ -42,26 +48,32 @@
     "xtend": "^4.0.1"
   },
   "devDependencies": {
-    "babel-cli": "^6.26.0",
-    "babel-loader": "^7.1.3",
-    "babel-plugin-transform-react-remove-prop-types": "^0.4.13",
-    "babel-preset-env": "^1.6.1",
-    "babel-preset-react": "^6.24.1",
-    "eslint": "^4.18.2",
-    "eslint-config-prettier": "^2.9.0",
+    "@babel/cli": "^7.1.0",
+    "@babel/core": "^7.1.0",
+    "@babel/preset-env": "^7.1.0",
+    "@babel/preset-react": "^7.0.0",
+    "babel-core": "^7.0.0-bridge.0",
+    "babel-jest": "^23.6.0",
+    "babel-loader": "^8.0.2",
+    "babel-plugin-transform-react-remove-prop-types": "^0.4.20",
+    "eslint": "^5.6.0",
+    "eslint-config-prettier": "^3.1.0",
     "eslint-config-sanity": "^4.0.2",
     "eslint-plugin-react": "^7.7.0",
-    "gh-pages-deploy": "^0.4.2",
-    "jest": "^22.4.2",
-    "prettier": "^1.11.1",
-    "react": "^16.2.0",
+    "gh-pages-deploy": "^0.5.0",
+    "jest": "^23.6.0",
+    "prettier": "^1.15.3",
+    "react": "^16.6.3",
     "react-addons-test-utils": "^15.6.2",
-    "react-dom": "^16.2.0",
-    "react-test-renderer": "^16.2.0",
-    "remark-breaks": "^1.0.0",
+    "react-dom": "^16.6.3",
+    "react-test-renderer": "^16.6.3",
+    "remark-breaks": "^1.0.2",
+    "remark-shortcodes": "^0.2.1",
     "rimraf": "^2.6.2",
-    "webpack": "^4.1.0",
-    "webpack-cli": "^2.0.10"
+    "uglify-js": "^3.4.5",
+    "webpack": "^4.26.1",
+    "webpack-bundle-analyzer": "^3.0.2",
+    "webpack-cli": "^3.1.1"
   },
   "peerDependencies": {
     "react": "^15.0.0 || ^16.0.0"

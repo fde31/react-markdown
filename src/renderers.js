@@ -3,10 +3,11 @@
 
 const xtend = require('xtend')
 const React = require('react')
+
+const supportsStringRender = parseInt((React.version || '16').slice(0, 2), 10) >= 16
 const createElement = React.createElement
 
 module.exports = {
-  root: 'div',
   break: 'br',
   paragraph: 'p',
   emphasis: 'em',
@@ -24,6 +25,8 @@ module.exports = {
   tableRow: SimpleRenderer.bind(null, 'tr'),
   tableCell: TableCell,
 
+  root: Root,
+  text: TextRenderer,
   list: List,
   listItem: ListItem,
   definition: NullRenderer,
@@ -31,7 +34,20 @@ module.exports = {
   inlineCode: InlineCode,
   code: CodeBlock,
   html: Html,
-  virtualHtml: VirtualHtml
+  virtualHtml: VirtualHtml,
+  parsedHtml: ParsedHtml
+}
+
+function TextRenderer(props) {
+  return supportsStringRender
+    ? props.children
+    : createElement('span', null, props.children)
+}
+
+function Root(props) {
+  const useFragment = !props.className
+  const root = useFragment ? React.Fragment || 'div' : 'div'
+  return createElement(root, useFragment ? null : props, props.children)
 }
 
 function SimpleRenderer(tag, props) {
@@ -88,12 +104,18 @@ function Html(props) {
 
   const tag = props.isBlock ? 'div' : 'span'
   if (props.escapeHtml) {
-    // @todo when fiber lands, we can simply render props.value
-    return createElement(tag, null, props.value)
+    const comp = React.Fragment || tag
+    return createElement(comp, null, props.value)
   }
 
   const nodeProps = {dangerouslySetInnerHTML: {__html: props.value}}
   return createElement(tag, nodeProps)
+}
+
+function ParsedHtml(props) {
+  return props['data-sourcepos']
+    ? React.cloneElement(props.element, {'data-sourcepos': props['data-sourcepos']})
+    : props.element
 }
 
 function VirtualHtml(props) {
